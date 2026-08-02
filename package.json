@@ -1,0 +1,13 @@
+{
+  "name": "cp32-online-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependency-free rendezvous and WebSocket relay for the CP32 host-authoritative client.",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

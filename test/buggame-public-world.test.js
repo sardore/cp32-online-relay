@@ -50,7 +50,7 @@ test("disconnected player keeps id through CP32 reconnection grace", () => {
   assert.equal(f.packets(b, "peer_left").at(-1).id, aId);
   const resumed = f.client();
   assert.equal(f.join(resumed, "token-alice-12345", "Alice"), aId);
-  assert.equal(f.packets(resumed, "peer_state").at(-1).state.x, undefined);
+  assert.equal(f.packets(resumed, "peer_state").length, 0);
   f.hub.handle(resumed, { type: "state", state: { x: 25, y: 18 } });
   assert.equal(f.packets(b, "peer_state").at(-1).state.x, 25);
   assert.equal(f.hub.stats().players, 2);

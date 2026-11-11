@@ -30,6 +30,8 @@ const cleanText = (value, max = 160) => String(value == null ? "" : value).trim(
 // MANRU_DUEL: the 1:1 ghost battle of the game 만루. The relay only matches two players and passes their payloads; it computes nothing for it.
 const validMode = value => ["PVP", "BOSS_COOP", "MANRU_DUEL"].includes(value) ? value : null;
 const isObject = value => value && typeof value === "object" && !Array.isArray(value);
+const { createBuggamePublicWorld } = require("./buggame-public-world");
+const publicWorld = createBuggamePublicWorld({ send: safeSend, clock: now });
 
 function websocketFrame(opcode, payload = Buffer.alloc(0)) {
   const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
@@ -490,6 +492,12 @@ function handleMessage(client, raw) {
   let message;
   try { message = JSON.parse(raw); }
   catch { return fail(client, "INVALID_JSON"); }
+  // Buggame uses CP32 transport with its existing public-world messages.
+  // Keep it isolated from the CP32 two-player session protocol.
+  if (isObject(message) && (message.type === "public_join" || client.publicWorldId)) {
+    client.lastSeen = now();
+    return publicWorld.handle(client, message);
+  }
   if (!isObject(message) || message.protocol !== PROTOCOL) return fail(client, "PROTOCOL_MISMATCH");
   client.lastSeen = now();
   const playerId = cleanText(message.playerId || client.playerId, 180);
@@ -528,6 +536,7 @@ function handleMessage(client, raw) {
 
 function disconnectClient(client, reason) {
   if (!client || client.closed) return;
+  publicWorld.disconnect(client);
   client.closed = true;
   clients.delete(client.id);
   browseClients.delete(client);
@@ -554,7 +563,7 @@ function disconnectClient(client, reason) {
 const server = http.createServer((request, response) => {
   if (request.method === "GET" && request.url?.split("?")[0] === "/health") {
     response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*" });
-    response.end(JSON.stringify({ ok: true, protocol: PROTOCOL, uptimeSeconds: Math.floor(process.uptime()), clients: clients.size, sessions: sessions.size, rooms: rooms.size, pendingMatches: pendingMatches.size, queues: Object.fromEntries([...queues].map(([mode, entries]) => [mode, entries.length])), liveMatches: liveMatches.size }));
+    response.end(JSON.stringify({ ok: true, protocol: PROTOCOL, uptimeSeconds: Math.floor(process.uptime()), clients: clients.size, sessions: sessions.size, rooms: rooms.size, pendingMatches: pendingMatches.size, queues: Object.fromEntries([...queues].map(([mode, entries]) => [mode, entries.length])), liveMatches: liveMatches.size, buggame: publicWorld.stats() }));
     return;
   }
   response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -591,6 +600,7 @@ server.on("upgrade", (request, socket, head) => {
 
 const maintenance = setInterval(() => {
   const time = now();
+  publicWorld.maintain(time);
   for (const [key, waiters] of waitingJoins) {
     const next = [];
     for (const entry of waiters) {

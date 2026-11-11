@@ -92,11 +92,12 @@ function createBuggamePublicWorld({ send, clock = Date.now }) {
   }
 
   function join(client, msg) {
-    if (client.sessionToken || client.role || client.queueEntryId) {
+    if (client.sessionToken || client.role || client.queueEntryId || client.playerId) {
       return error(client, "이 연결은 이미 CP32 대전 세션에 사용 중입니다.");
     }
     const token = text(msg.clientToken, 160);
     if (!token || token.length < 8) return error(client, "플레이어 식별 토큰이 올바르지 않습니다.");
+    if (client.publicWorldId) return error(client, "이미 공개 월드에 참가한 연결입니다.");
     const nickname = text(msg.nickname, 12) || "플레이어";
     let p = byToken.get(token);
     if (!p && activeCount() >= MAX_PLAYERS) return error(client, "공개 월드 접속 인원이 가득 찼습니다.");
@@ -160,6 +161,7 @@ function createBuggamePublicWorld({ send, clock = Date.now }) {
       return;
     }
     if (message.type === "team_directory_request") {
+      if (!checkRate(p, "directory", 5)) return;
       emit(p, { type: "team_directory", teams: directory() });
       return;
     }
